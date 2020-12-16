@@ -32,6 +32,7 @@ interface IProps {
 }
 
 let interval: number;
+let oldSeconds: number = 0;
 
 const CountDown = forwardRef<IInputHandles, IProps>(
   (
@@ -52,10 +53,10 @@ const CountDown = forwardRef<IInputHandles, IProps>(
     },
     ref
   ) => {
-    const convertedSeconds = useMemo(() => seconds * SECOND, [seconds]);
-    const radius = useMemo(() => size / 2 - barWidth / 2, [size, barWidth]);
-    const circumference = useMemo(() => radius * 2 * Math.PI, [radius]);
+    const [duration, setDuration] = useState(seconds > 0 ? seconds : 1);
+
     const mask =  useMemo(() => {
+      setDuration(seconds > 0 ? seconds : 1);
       if (!showMask) {
         return null;
       } else if (seconds > 3599) {
@@ -67,8 +68,28 @@ const CountDown = forwardRef<IInputHandles, IProps>(
       } 
     }, [seconds, showMask]);
 
+    const convertedSeconds = useMemo(() => duration * SECOND, [duration]);
+    const radius = useMemo(() => size / 2 - barWidth / 2, [size, barWidth]);
+    const circumference = useMemo(() => radius * 2 * Math.PI, [radius]);
+
     const [countDown, setCountDown] = useState(convertedSeconds / MILISECOND);
-    const [display, setDisplay] = useState( showMask ? secondsToTime(seconds, mask) : seconds );
+    const [togglePause, setTogglePause] = useState(isPaused);
+
+    useEffect(() => {
+      if (oldSeconds > 0) {
+        const secDifference = (duration - oldSeconds) * SECOND / MILISECOND;
+        setCountDown(prev => {
+          const value = prev + secDifference;
+          return value > 0 ? value : 0; 
+        });
+        setToggleRestart((prev) => !prev);
+      }
+
+      oldSeconds = duration;
+    }, [duration]);
+
+    const [display, setDisplay] = useState( showMask ? secondsToTime(duration, mask) : duration );
+  
     const [toggleRestart, setToggleRestart] = useState(false);
     const [sizeT, setSizeT] = useState(size);
     const [offset, setOffset] = useState(0);
@@ -78,11 +99,20 @@ const CountDown = forwardRef<IInputHandles, IProps>(
     }, [size]);
 
     useEffect(() => {
-      if (!isPaused) {
+      const timeLeft = countDown * MILISECOND;
+
+      if (timeLeft > 0 || isPaused) {
+        setTogglePause(isPaused);
+      }       
+    }, [isPaused, countDown])
+
+    useEffect(() => {
+      if (!togglePause) {
         interval = window.setInterval(() => {
           setCountDown((prev) => {
-            const value = prev - 1;            
-            if (value === 0) {
+            let value = prev - 1;     
+            if (value <= 0) {
+              value = 0;
               clearInterval(interval);
               onComplete && onComplete();
             }
@@ -94,20 +124,19 @@ const CountDown = forwardRef<IInputHandles, IProps>(
       return () => {
         clearInterval(interval);
       };
-    }, [isPaused, toggleRestart, onComplete]);
+    }, [togglePause, toggleRestart, onComplete]);
 
     useEffect(() => {
-      const intervalRest = countDown * MILISECOND;
-      const percentRest = (intervalRest * 100) / convertedSeconds;
+      const timeLeft = countDown * MILISECOND;
+      const percentRest = (timeLeft * 100) / convertedSeconds;
       const newOffset = circumference - (percentRest / 100) * circumference;
-      const paused = isPaused ? pausedText : undefined;
+      const paused = isPaused && (timeLeft < convertedSeconds && timeLeft > 0) ? pausedText : undefined;
 
       setOffset(newOffset);
-      setDisplay(formatDisplay(intervalRest / SECOND, endText, paused, mask));
+      setDisplay(formatDisplay(timeLeft / SECOND, endText, paused, mask));
     }, [
       countDown,
       circumference,
-      seconds,
       convertedSeconds,
       endText,
       pausedText,
