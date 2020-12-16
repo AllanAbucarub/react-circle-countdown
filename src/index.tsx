@@ -9,7 +9,7 @@ import "./styles.scss";
 
 const SECOND = 1000;
 const MILISECOND = 100;
-const FONT = "bold 16px sans-serif";
+const FONT = "20px sans-serif";
 
 export interface IInputHandles {
   restart(): void;
@@ -20,11 +20,14 @@ interface IProps {
   size?: number;
   font?: string;
   fontColor?: string;
-  bar?: { color: string; width: number; backGroundColor: string };
-  showAllMask?: boolean;
+  barColor?: string; 
+  barWidth?: number; 
+  barTrailColor?: string;
+  barEndShape?: "round" | "butt";
+  showMask?: boolean;
   isPaused?: boolean;
   pausedText?: string;
-  finishText?: string;
+  endText?: string;
   onComplete?: () => any;
 }
 
@@ -34,33 +37,38 @@ const CountDown = forwardRef<IInputHandles, IProps>(
   (
     {
       seconds,
-      size = 110,
+      size = 130,
       font = FONT,
       fontColor = "#FFF",
-      bar = { color: "lime", width: 10, backGroundColor: "green" },
-      showAllMask = false,
+      barColor = "#8ac4e1", 
+      barWidth = 15,
+      barTrailColor= "#6e818b",
+      barEndShape = "butt",
+      showMask = true,
       isPaused = false,
       pausedText,
-      finishText = "FINISH",
+      endText = "Time over",
       onComplete,
     },
     ref
   ) => {
     const convertedSeconds = useMemo(() => seconds * SECOND, [seconds]);
-    const radius = useMemo(() => size / 2 - bar.width, [size, bar.width]);
+    const radius = useMemo(() => size / 2 - barWidth / 2, [size, barWidth]);
     const circumference = useMemo(() => radius * 2 * Math.PI, [radius]);
     const mask =  useMemo(() => {
-      if (showAllMask || seconds > 3599) {
+      if (!showMask) {
+        return null;
+      } else if (seconds > 3599) {
         return [11, 8];
       } else if (seconds > 59) {
         return [14, 5];
       } else {
         return [17, 2];
       } 
-    }, [showAllMask, seconds]);
+    }, [seconds, showMask]);
 
     const [countDown, setCountDown] = useState(convertedSeconds / MILISECOND);
-    const [display, setDisplay] = useState(secondsToTime(seconds, mask));
+    const [display, setDisplay] = useState( showMask ? secondsToTime(seconds, mask) : seconds );
     const [toggleRestart, setToggleRestart] = useState(false);
     const [sizeT, setSizeT] = useState(size);
     const [offset, setOffset] = useState(0);
@@ -95,13 +103,13 @@ const CountDown = forwardRef<IInputHandles, IProps>(
       const paused = isPaused ? pausedText : undefined;
 
       setOffset(newOffset);
-      setDisplay(formatDisplay(intervalRest / SECOND, finishText, paused, mask));
+      setDisplay(formatDisplay(intervalRest / SECOND, endText, paused, mask));
     }, [
       countDown,
       circumference,
       seconds,
       convertedSeconds,
-      finishText,
+      endText,
       pausedText,
       isPaused,
       mask
@@ -119,8 +127,8 @@ const CountDown = forwardRef<IInputHandles, IProps>(
         <svg>
           <circle
             className="teste"
-            stroke={bar.backGroundColor}
-            strokeWidth={bar.width - 0.3}
+            stroke={barTrailColor}
+            strokeWidth={barWidth - 0.3}
             fill="transparent"
             r={radius}
             cx={sizeT / 2}
@@ -130,24 +138,27 @@ const CountDown = forwardRef<IInputHandles, IProps>(
           />
           <circle
             className="teste"
-            stroke={bar.color}
-            strokeWidth={bar.width}
+            stroke={barColor}
+            strokeWidth={barWidth}
             fill="transparent"
             r={radius}
             cx={sizeT / 2}
             cy={sizeT / 2}
             strokeDasharray={`${circumference} ${circumference}`}
             strokeDashoffset={offset}
-            strokeLinecap="round"
+            strokeLinecap={barEndShape}
           />
         </svg>
-        <span style={{ color: fontColor, font: font }}>{display}</span>
+        <span style={{ color: fontColor, font: font, width: `calc(100% - ${barWidth*2.3}px)` }}>{display}</span>
       </div>
     );
   }
 );
 
-function secondsToTime(seconds: number, mask: number[]) {
+function secondsToTime(seconds: number, mask: number[] | null) {
+  if (!mask) {
+    return seconds;
+  }
   var date = new Date(0);
   date.setSeconds(seconds);
   return date.toISOString().substr(mask[0], mask[1]);
@@ -157,12 +168,13 @@ function formatDisplay(
   seconds: number,
   text: string,
   pausedText: string | undefined,
-  mask: number[]
+  mask: number[] | null
 ) {
+  const remaining = Math.ceil(seconds);
   if (pausedText) {
     return pausedText;
   } else {
-    return seconds === 0 ? text : secondsToTime(seconds + 0.9, mask);
+    return remaining === 0 ? text : secondsToTime(remaining, mask);
   }
 }
 
